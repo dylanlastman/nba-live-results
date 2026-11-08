@@ -1,0 +1,38 @@
+name: NBA live results
+
+# Every 5 minutes from 11 AM to 3 AM New York time (16:00-07:59 UTC). GitHub often starts scheduled runs a few
+# minutes late. espn_live.py only saves while a game is live or just finished, so quiet runs end in seconds.
+on:
+  schedule:
+    - cron: '*/5 16-23 * * *'
+    - cron: '*/5 0-7 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Save even if no game is live (for testing)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: nba-live
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read ESPN box scores
+        run: python3 espn_live.py live.json
+        env:
+          FORCE: ${{ inputs.force && '1' || '0' }}
+      - name: Install Claude Code
+        if: hashFiles('live.json') != ''
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Save to the NBA Plays board
+        if: hashFiles('live.json') != ''
+        run: sh save.sh live.json
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          BOARD_URL: ${{ secrets.BOARD_URL }}
